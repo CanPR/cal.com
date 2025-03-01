@@ -1,0 +1,70 @@
+name: Deploy CanPR Cal.com
+
+on:
+  push:
+    branches:
+      - main
+  workflow_run:
+
+env:
+  EC2_INSTANCE_NAME: "CanPR Calcom"
+  S3_BUCKET_NAME: "secrets"
+  S3_DIRECTORY: "calcom"
+
+jobs:
+  deploy:
+    name: Deploy CanPR Cal.com
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Setup yarn
+        uses: actions/setup-node@v2
+        with:
+          node-version: "18"
+          cache: "yarn"
+
+      - name: Install dependencies
+        run: yarn install
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Get EC2 instance IP
+        id: ec2-ip
+        run: |
+          aws ec2 describe-instances --filters "Name=tag:Name,Values=${{ env.EC2_INSTANCE_NAME }}" --query "Reservations[*].Instances[*].PublicIpAddress" --output text
+
+      - name: Download .env from AWS S3
+        id: download-env
+        run: |
+          aws s3 cp s3://${{ env.S3_BUCKET_NAME }}/${{ env.S3_DIRECTORY }}/.env ./.env
+          aws s3 cp s3://${{ env.S3_BUCKET_NAME }}/${{ env.S3_DIRECTORY }}/.env.appStore ./.env.appStore
+
+      - name: Build
+        run: yarn build
+
+      - name: Zip build
+        run: zip -r cal.com.zip . -x "*/node_modules/*" "*/.git/*" "*/.yarn/cache/*" "*/tests/*" "*/__checks__/*" "*/help/*" "cal.com/apps/storybook/*" "cal.com/apps/swagger/*" "*/docs/*"
+
+      - name: Deploy to EC2 Amazon Linux
+        uses: actions/ssh@v2
+        with:
+          ssh-host: ${{ steps.ec2-ip.outputs.ip }}
+          ssh-username: ec2-user
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          run: |
+            cd ~
+            unzip cal.com.zip -d cal.com
+            cd cal.com
+            yarn install
+            pm2 stop all
+            pm2 delete all
+            pm2 start yarn --name 'canpr-calcom' -- start

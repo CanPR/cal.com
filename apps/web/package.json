@@ -16,6 +16,7 @@
     "type-check:ci": "tsc-absolute --pretty --noEmit",
     "build": "next build",
     "start": "next start",
+    "pm2": "pm2 start yarn --name 'canpr-calcom' -- start",
     "lint": "eslint . --ignore-path .gitignore",
     "lint:fix": "eslint . --ext .ts,.js,.tsx,.jsx --fix",
     "lint:report": "eslint . --format json --output-file ../../lint-results/web.json",
