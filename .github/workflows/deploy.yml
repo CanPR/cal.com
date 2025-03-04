@@ -62,9 +62,9 @@ jobs:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
           run: |
             cd ~
-            unzip cal.com.zip -d cal.com
-            cd cal.com
-            yarn install
             pm2 stop all
             pm2 delete all
+            unzip cal.com.zip
+            cd cal.com
+            yarn install
             pm2 start yarn --name 'canpr-calcom' -- start
